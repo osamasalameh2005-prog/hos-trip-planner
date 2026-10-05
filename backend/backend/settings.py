@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-&k#4p5q12_1_5ik9ws=(zg=(4aan57oj0ul5sbnue%gcsgh+xc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["hos-trip-planner-taoy.onrender.com"]
 
 
 # Application definition
@@ -37,8 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-     'api',
-     'corsheaders',
+    'api',
+    'corsheaders',
 ]
 
 
@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
 
 ROOT_URLCONF = 'backend.urls'
 
