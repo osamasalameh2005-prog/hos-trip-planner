@@ -10,6 +10,8 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+const API_URL = "/api/trips/";
+
 const defaultCenter = [31.9539, 35.9106];
 
 const markerIcon = new L.Icon({
@@ -36,9 +38,7 @@ function MapUpdater({ points }) {
   const map = useMap();
 
   useEffect(() => {
-    if (points.length === 0) {
-      return;
-    }
+    if (points.length === 0) return;
 
     if (points.length === 1) {
       map.setView(points[0], 8);
@@ -279,25 +279,22 @@ function App() {
     setResult(null);
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/trips/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            current_location:
-              currentLocation,
-            pickup_location:
-              pickupLocation,
-            dropoff_location:
-              dropoffLocation,
-            current_cycle_used:
-              cycleNumber,
-          }),
-        }
-      );
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          current_location:
+            currentLocation,
+          pickup_location:
+            pickupLocation,
+          dropoff_location:
+            dropoffLocation,
+          current_cycle_used:
+            cycleNumber,
+        }),
+      });
 
       const data = await response.json();
 
@@ -360,9 +357,7 @@ function App() {
   const uniqueRoutePoints =
     routePoints.filter(
       (point, index, array) => {
-        if (index === 0) {
-          return true;
-        }
+        if (index === 0) return true;
 
         const previous =
           array[index - 1];
@@ -593,8 +588,7 @@ function App() {
             )}
           </div>
 
-          {uniqueRoutePoints.length >
-            0 && (
+          {uniqueRoutePoints.length > 0 && (
             <div
               style={{
                 marginBottom: "30px",
