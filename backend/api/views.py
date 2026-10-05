@@ -1,5 +1,4 @@
 import json
-
 import requests
 
 from django.http import JsonResponse
@@ -11,16 +10,12 @@ from .models import Trip
 CYCLE_LIMIT = 70.0
 DAILY_DRIVING_LIMIT = 11.0
 DAILY_DUTY_WINDOW = 14.0
-
 DRIVING_BREAK_LIMIT = 8.0
 BREAK_DURATION = 0.5
-
 RESET_DURATION = 10.0
 RESTART_DURATION = 34.0
-
 PICKUP_DURATION = 1.0
 DROPOFF_DURATION = 1.0
-
 FUEL_DISTANCE = 1000.0
 FUEL_DURATION = 0.5
 
@@ -93,7 +88,6 @@ def geocode_location(location):
 
         score = 0
 
-        # Prefer real populated places.
         if result_type == "city":
             score += 120
         elif result_type == "town":
@@ -103,11 +97,9 @@ def geocode_location(location):
         elif result_type == "village":
             score += 100
 
-        # Prefer results that contain a country.
         if address.get("country"):
             score += 20
 
-        # Names of possible populated places.
         place_names = [
             address.get("city", ""),
             address.get("town", ""),
@@ -115,18 +107,14 @@ def geocode_location(location):
             address.get("municipality", ""),
         ]
 
-        # Strong preference for an exact place-name match.
         for name in place_names:
             if name and name.strip().lower() == query:
                 score += 100
 
-        # Match all parts supplied by the user.
         for part in query_parts:
             if part in display_name:
                 score += 20
 
-        # Prefer results where the searched word is
-        # actually the city/town/village name.
         for name in place_names:
             if name and query == name.strip().lower():
                 score += 80
@@ -219,21 +207,18 @@ def route_between(start, end):
 
 def add_log(
     logs,
-    day,
+    status,
     start,
     end,
-    status,
+    duration,
     location="",
 ):
-    if end <= start:
-        return
-
     logs.append(
         {
-            "day": day,
-            "start_hour": round(start, 2),
-            "end_hour": round(end, 2),
             "status": status,
+            "start": round(start, 2),
+            "end": round(end, 2),
+            "duration": round(duration, 2),
             "location": location,
         }
     )
@@ -241,302 +226,217 @@ def add_log(
 
 def add_rest_period(
     logs,
-    day,
-    start,
-    duration,
-    reason,
+    current_time,
+    remaining_driving,
+    remaining_duty,
 ):
-    end = min(
-        start + duration,
-        24.0,
+    rest_duration = 0.5
+
+    add_log(
+        logs,
+        "Break",
+        current_time,
+        current_time + rest_duration,
+        rest_duration,
+    )
+
+    return (
+        current_time + rest_duration,
+        remaining_driving,
+        remaining_duty,
+    )
+
+
+def build_hos_plan(
+    current_cycle_used,
+    first_drive_hours,
+    second_drive_hours,
+):
+    logs = []
+
+    cycle_remaining = (
+        CYCLE_LIMIT - current_cycle_used
+    )
+
+    total_driving = (
+        first_drive_hours + second_drive_hours
+    )
+
+    current_time = 0.0
+    duty_time = 0.0
+    driving_time = 0.0
+    cycle_used = current_cycle_used
+
+    def add_driving(hours, description):
+        nonlocal current_time
+        nonlocal duty_time
+        nonlocal driving_time
+        nonlocal cycle_used
+
+        remaining = hours
+
+        while remaining > 0:
+            available_drive = min(
+                DAILY_DRIVING_LIMIT - driving_time,
+                DRIVING_BREAK_LIMIT - (
+                    driving_time % DRIVING_BREAK_LIMIT
+                    if driving_time > 0
+                    else 0
+                ),
+                CYCLE_LIMIT - cycle_used,
+                remaining,
+            )
+
+            if available_drive <= 0:
+                if driving_time >= DAILY_DRIVING_LIMIT:
+                    add_log(
+                        logs,
+                        "Daily Reset",
+                        current_time,
+                        current_time + RESET_DURATION,
+                        RESET_DURATION,
+                    )
+
+                    current_time += RESET_DURATION
+                    duty_time = 0.0
+                    driving_time = 0.0
+
+                    continue
+
+                if cycle_used >= CYCLE_LIMIT:
+                    add_log(
+                        logs,
+                        "Cycle Reset",
+                        current_time,
+                        current_time + RESTART_DURATION,
+                        RESTART_DURATION,
+                    )
+
+                    current_time += RESTART_DURATION
+                    cycle_used = 0.0
+
+                    continue
+
+                add_log(
+                    logs,
+                    "Break",
+                    current_time,
+                    current_time + BREAK_DURATION,
+                    BREAK_DURATION,
+                )
+
+                current_time += BREAK_DURATION
+                continue
+
+            if (
+                duty_time + available_drive
+                > DAILY_DUTY_WINDOW
+            ):
+                add_log(
+                    logs,
+                    "Daily Reset",
+                    current_time,
+                    current_time + RESET_DURATION,
+                    RESET_DURATION,
+                )
+
+                current_time += RESET_DURATION
+                duty_time = 0.0
+                driving_time = 0.0
+
+                continue
+
+            add_log(
+                logs,
+                "Driving",
+                current_time,
+                current_time + available_drive,
+                available_drive,
+                description,
+            )
+
+            current_time += available_drive
+            duty_time += available_drive
+            driving_time += available_drive
+            cycle_used += available_drive
+            remaining -= available_drive
+
+            if (
+                remaining > 0
+                and driving_time >= DRIVING_BREAK_LIMIT
+            ):
+                add_log(
+                    logs,
+                    "Break",
+                    current_time,
+                    current_time + BREAK_DURATION,
+                    BREAK_DURATION,
+                )
+
+                current_time += BREAK_DURATION
+                duty_time += BREAK_DURATION
+
+                driving_time = 0.0
+
+    add_driving(
+        first_drive_hours,
+        "Current Location → Pickup",
     )
 
     add_log(
         logs,
-        day,
-        start,
-        end,
-        "Sleeper Berth",
-        reason,
+        "Pickup",
+        current_time,
+        current_time + PICKUP_DURATION,
+        PICKUP_DURATION,
     )
 
-    return end
+    current_time += PICKUP_DURATION
+    duty_time += PICKUP_DURATION
 
-
-def build_hos_plan(
-    total_driving_hours,
-    total_distance_miles,
-    cycle_used,
-):
-    cycle_remaining = max(
-        0.0,
-        CYCLE_LIMIT - cycle_used,
+    add_driving(
+        second_drive_hours,
+        "Pickup → Dropoff",
     )
 
-    remaining_driving = max(
-        0.0,
-        total_driving_hours,
+    add_log(
+        logs,
+        "Dropoff",
+        current_time,
+        current_time + DROPOFF_DURATION,
+        DROPOFF_DURATION,
     )
 
-    current_day = 1
-    day_elapsed = 0.0
-    day_driving = 0.0
-    day_since_break = 0.0
+    current_time += DROPOFF_DURATION
+    duty_time += DROPOFF_DURATION
 
-    total_trip_hours = 0.0
-    total_break_hours = 0.0
-
-    logs = []
-
-    fuel_distance = 0.0
-
-    if total_driving_hours > 0:
-        trip_distance_ratio = (
-            total_distance_miles
-            / total_driving_hours
-        )
-    else:
-        trip_distance_ratio = 0.0
-
-    while remaining_driving > 0.001:
-
-        if cycle_remaining <= 0.001:
-            restart_remaining = RESTART_DURATION
-
-            while restart_remaining > 0:
-                available_today = 24.0 - day_elapsed
-
-                if available_today <= 0:
-                    current_day += 1
-                    day_elapsed = 0.0
-                    day_driving = 0.0
-                    day_since_break = 0.0
-                    continue
-
-                restart_today = min(
-                    restart_remaining,
-                    available_today,
-                )
-
-                add_log(
-                    logs,
-                    current_day,
-                    day_elapsed,
-                    day_elapsed + restart_today,
-                    "Sleeper Berth",
-                    "34-hour restart",
-                )
-
-                day_elapsed += restart_today
-                total_trip_hours += restart_today
-                restart_remaining -= restart_today
-
-                if restart_remaining > 0:
-                    current_day += 1
-                    day_elapsed = 0.0
-                    day_driving = 0.0
-                    day_since_break = 0.0
-
-            cycle_remaining = CYCLE_LIMIT
-            continue
-
-        if (
-            day_elapsed >= DAILY_DUTY_WINDOW
-            or day_driving >= DAILY_DRIVING_LIMIT
-        ):
-            start = day_elapsed
-
-            if start < 24.0:
-                rest_available = min(
-                    RESET_DURATION,
-                    24.0 - start,
-                )
-
-                add_log(
-                    logs,
-                    current_day,
-                    start,
-                    start + rest_available,
-                    "Sleeper Berth",
-                    "10-hour daily reset",
-                )
-
-                total_trip_hours += rest_available
-
-            current_day += 1
-            day_elapsed = 0.0
-            day_driving = 0.0
-            day_since_break = 0.0
-
-            continue
-
-        if day_since_break >= DRIVING_BREAK_LIMIT:
-            if (
-                day_elapsed + BREAK_DURATION
-                <= DAILY_DUTY_WINDOW
-            ):
-                add_log(
-                    logs,
-                    current_day,
-                    day_elapsed,
-                    day_elapsed + BREAK_DURATION,
-                    "Off Duty",
-                    "30-minute break",
-                )
-
-                day_elapsed += BREAK_DURATION
-                total_break_hours += BREAK_DURATION
-                total_trip_hours += BREAK_DURATION
-                day_since_break = 0.0
-
-                continue
-
-            current_day += 1
-            day_elapsed = 0.0
-            day_driving = 0.0
-            day_since_break = 0.0
-            continue
-
-        daily_drive_remaining = (
-            DAILY_DRIVING_LIMIT - day_driving
-        )
-
-        daily_window_remaining = (
-            DAILY_DUTY_WINDOW - day_elapsed
-        )
-
-        break_remaining = (
-            DRIVING_BREAK_LIMIT - day_since_break
-        )
-
-        available_driving = min(
-            remaining_driving,
-            daily_drive_remaining,
-            daily_window_remaining,
-            cycle_remaining,
-            break_remaining,
-        )
-
-        if available_driving <= 0.001:
-            current_day += 1
-            day_elapsed = 0.0
-            day_driving = 0.0
-            day_since_break = 0.0
-            continue
-
-        drive_start = day_elapsed
-        drive_end = (
-            day_elapsed + available_driving
-        )
-
-        add_log(
-            logs,
-            current_day,
-            drive_start,
-            drive_end,
-            "Driving",
-        )
-
-        day_elapsed = drive_end
-        day_driving += available_driving
-        day_since_break += available_driving
-
-        cycle_remaining -= available_driving
-        remaining_driving -= available_driving
-
-        distance_driven = (
-            available_driving
-            * trip_distance_ratio
-        )
-
-        fuel_distance += distance_driven
-        total_trip_hours += available_driving
-
-        if (
-            fuel_distance >= FUEL_DISTANCE
-            and remaining_driving > 0.001
-        ):
-            if (
-                day_elapsed + FUEL_DURATION
-                <= DAILY_DUTY_WINDOW
-            ):
-                add_log(
-                    logs,
-                    current_day,
-                    day_elapsed,
-                    day_elapsed + FUEL_DURATION,
-                    "On Duty (Not Driving)",
-                    "Fuel stop",
-                )
-
-                day_elapsed += FUEL_DURATION
-                total_trip_hours += FUEL_DURATION
-                fuel_distance = 0.0
-
-    if day_elapsed + PICKUP_DURATION <= 24.0:
-        add_log(
-            logs,
-            current_day,
-            day_elapsed,
-            day_elapsed + PICKUP_DURATION,
-            "On Duty (Not Driving)",
-            "Pickup",
-        )
-
-        day_elapsed += PICKUP_DURATION
-        total_trip_hours += PICKUP_DURATION
-
-    if day_elapsed + DROPOFF_DURATION <= 24.0:
-        add_log(
-            logs,
-            current_day,
-            day_elapsed,
-            day_elapsed + DROPOFF_DURATION,
-            "On Duty (Not Driving)",
-            "Dropoff",
-        )
-
-        day_elapsed += DROPOFF_DURATION
-        total_trip_hours += DROPOFF_DURATION
-
-    max_day = max(
-        [
-            item["day"]
-            for item in logs
-        ],
-        default=1,
+    fuel_stops = int(
+        total_driving // FUEL_DISTANCE
     )
 
-    days = []
+    if fuel_stops > 0:
+        for _ in range(fuel_stops):
+            add_log(
+                logs,
+                "Fuel",
+                current_time,
+                current_time + FUEL_DURATION,
+                FUEL_DURATION,
+            )
 
-    for day_number in range(
-        1,
-        max_day + 1,
-    ):
-        day_logs = [
-            item
-            for item in logs
-            if item["day"] == day_number
-        ]
-
-        days.append(
-            {
-                "day": day_number,
-                "logs": day_logs,
-            }
-        )
+            current_time += FUEL_DURATION
+            duty_time += FUEL_DURATION
 
     return {
-        "total_trip_hours": round(
-            total_trip_hours,
+        "logs": logs,
+        "total_time_hours": round(
+            current_time,
             2,
         ),
-        "number_of_days": max_day,
-        "total_break_hours": round(
-            total_break_hours,
+        "cycle_remaining_hours": round(
+            max(0, CYCLE_LIMIT - cycle_used),
             2,
         ),
-        "days": days,
     }
 
 
@@ -551,89 +451,53 @@ def create_trip(request):
         )
 
     try:
-        if request.content_type == "application/json":
-            data = json.loads(
-                request.body.decode("utf-8")
-            )
-        else:
-            data = request.POST
+        data = json.loads(
+            request.body.decode("utf-8")
+        )
 
-        current_location = str(
-            data.get(
-                "current_location",
-                "",
-            )
+        current_location = data.get(
+            "current_location",
+            "",
         ).strip()
 
-        pickup_location = str(
-            data.get(
-                "pickup_location",
-                "",
-            )
+        pickup_location = data.get(
+            "pickup_location",
+            "",
         ).strip()
 
-        dropoff_location = str(
-            data.get(
-                "dropoff_location",
-                "",
-            )
+        dropoff_location = data.get(
+            "dropoff_location",
+            "",
         ).strip()
 
-        cycle_value = data.get(
-            "current_cycle_used"
+        current_cycle_used = float(
+            data.get(
+                "current_cycle_used",
+                0,
+            )
         )
 
         if not current_location:
-            return JsonResponse(
-                {
-                    "error": (
-                        "Current location is required."
-                    )
-                },
-                status=400,
+            raise ValueError(
+                "Current location is required."
             )
 
         if not pickup_location:
-            return JsonResponse(
-                {
-                    "error": (
-                        "Pickup location is required."
-                    )
-                },
-                status=400,
+            raise ValueError(
+                "Pickup location is required."
             )
 
         if not dropoff_location:
-            return JsonResponse(
-                {
-                    "error": (
-                        "Dropoff location is required."
-                    )
-                },
-                status=400,
+            raise ValueError(
+                "Dropoff location is required."
             )
 
-        if cycle_value is None:
-            return JsonResponse(
-                {
-                    "error": (
-                        "Current cycle used is required."
-                    )
-                },
-                status=400,
-            )
-
-        cycle_used = float(cycle_value)
-
-        if cycle_used < 0 or cycle_used > 70:
-            return JsonResponse(
-                {
-                    "error": (
-                        "Current cycle used must "
-                        "be between 0 and 70 hours."
-                    )
-                },
-                status=400,
+        if (
+            current_cycle_used < 0
+            or current_cycle_used > CYCLE_LIMIT
+        ):
+            raise ValueError(
+                "Current cycle used must be between 0 and 70 hours."
             )
 
         current = geocode_location(
@@ -658,80 +522,92 @@ def create_trip(request):
             dropoff,
         )
 
-        total_distance = (
+        total_distance_miles = round(
             current_to_pickup["distance_miles"]
-            + pickup_to_dropoff["distance_miles"]
+            + pickup_to_dropoff["distance_miles"],
+            2,
         )
 
-        total_driving_hours = (
+        total_driving_hours = round(
             current_to_pickup["driving_hours"]
-            + pickup_to_dropoff["driving_hours"]
+            + pickup_to_dropoff["driving_hours"],
+            2,
         )
 
         hos_plan = build_hos_plan(
-            total_driving_hours,
-            total_distance,
-            cycle_used,
+            current_cycle_used,
+            current_to_pickup["driving_hours"],
+            pickup_to_dropoff["driving_hours"],
         )
 
         trip = Trip.objects.create(
             current_location=current_location,
             pickup_location=pickup_location,
             dropoff_location=dropoff_location,
-            current_cycle_used=cycle_used,
+            current_cycle_used=current_cycle_used,
+            total_distance_miles=total_distance_miles,
+            total_driving_hours=total_driving_hours,
         )
 
         return JsonResponse(
             {
                 "id": trip.id,
-                "current_cycle_used": cycle_used,
+
+                "locations": {
+                    "current": current,
+                    "pickup": pickup,
+                    "dropoff": dropoff,
+                },
+
+                "current_cycle_used": current_cycle_used,
+
                 "remaining_cycle_hours": round(
-                    max(
-                        0,
-                        CYCLE_LIMIT - cycle_used,
-                    ),
+                    CYCLE_LIMIT
+                    - current_cycle_used,
                     2,
                 ),
+
                 "current_to_pickup": current_to_pickup,
+
                 "pickup_to_dropoff": pickup_to_dropoff,
-                "total_distance_miles": round(
-                    total_distance,
-                    2,
-                ),
-                "total_driving_hours": round(
-                    total_driving_hours,
-                    2,
-                ),
+
+                "total_distance_miles": total_distance_miles,
+
+                "total_driving_hours": total_driving_hours,
+
                 "pickup_hours": PICKUP_DURATION,
+
                 "dropoff_hours": DROPOFF_DURATION,
+
                 "fuel_interval_miles": FUEL_DISTANCE,
+
                 "hos_plan": hos_plan,
             }
         )
 
-    except ValueError as error:
+    except ValueError as exc:
         return JsonResponse(
             {
-                "error": str(error)
+                "error": str(exc)
             },
             status=400,
         )
 
-    except requests.RequestException:
+    except requests.RequestException as exc:
         return JsonResponse(
             {
                 "error": (
-                    "A map or routing service "
-                    "is temporarily unavailable."
+                    "Location or routing service error: "
+                    f"{str(exc)}"
                 )
             },
             status=502,
         )
 
-    except Exception as error:
+    except Exception as exc:
         return JsonResponse(
             {
-                "error": str(error)
+                "error": str(exc)
             },
             status=500,
         )
