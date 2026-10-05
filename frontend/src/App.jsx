@@ -259,9 +259,7 @@ function App() {
     }
 
     if (cycleUsed === "") {
-      alert(
-        "Enter current cycle used hours."
-      );
+      alert("Enter current cycle used hours.");
       return;
     }
 
@@ -285,14 +283,10 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          current_location:
-            currentLocation,
-          pickup_location:
-            pickupLocation,
-          dropoff_location:
-            dropoffLocation,
-          current_cycle_used:
-            cycleNumber,
+          current_location: currentLocation,
+          pickup_location: pickupLocation,
+          dropoff_location: dropoffLocation,
+          current_cycle_used: cycleNumber,
         }),
       });
 
@@ -308,9 +302,7 @@ function App() {
 
       setResult(data);
 
-      alert(
-        "Trip created successfully!"
-      );
+      alert("Trip created successfully!");
     } catch (error) {
       console.error(error);
 
@@ -375,8 +367,7 @@ function App() {
         maxWidth: "1100px",
         margin: "0 auto",
         padding: "30px",
-        fontFamily:
-          "Arial, sans-serif",
+        fontFamily: "Arial, sans-serif",
       }}
     >
       <h1>HOS Trip Planner</h1>
@@ -395,9 +386,7 @@ function App() {
           placeholder="Current Location"
           value={currentLocation}
           onChange={(e) =>
-            setCurrentLocation(
-              e.target.value
-            )
+            setCurrentLocation(e.target.value)
           }
           style={{
             padding: "12px",
@@ -410,9 +399,7 @@ function App() {
           placeholder="Pickup Location"
           value={pickupLocation}
           onChange={(e) =>
-            setPickupLocation(
-              e.target.value
-            )
+            setPickupLocation(e.target.value)
           }
           style={{
             padding: "12px",
@@ -425,9 +412,7 @@ function App() {
           placeholder="Dropoff Location"
           value={dropoffLocation}
           onChange={(e) =>
-            setDropoffLocation(
-              e.target.value
-            )
+            setDropoffLocation(e.target.value)
           }
           style={{
             padding: "12px",
@@ -443,9 +428,7 @@ function App() {
           placeholder="Current Cycle Used"
           value={cycleUsed}
           onChange={(e) =>
-            setCycleUsed(
-              e.target.value
-            )
+            setCycleUsed(e.target.value)
           }
           style={{
             padding: "12px",
@@ -485,18 +468,14 @@ function App() {
               <strong>
                 Current Cycle Used:
               </strong>{" "}
-              {result.current_cycle_used}{" "}
-              hours
+              {result.current_cycle_used} hours
             </p>
 
             <p>
               <strong>
                 Remaining Cycle Hours:
               </strong>{" "}
-              {
-                result.remaining_cycle_hours
-              }{" "}
-              hours
+              {result.remaining_cycle_hours} hours
             </p>
 
             <p>
@@ -521,20 +500,14 @@ function App() {
               <strong>
                 Total Distance:
               </strong>{" "}
-              {
-                result.total_distance_miles
-              }{" "}
-              miles
+              {result.total_distance_miles} miles
             </p>
 
             <p>
               <strong>
                 Total Driving Hours:
               </strong>{" "}
-              {
-                result.total_driving_hours
-              }{" "}
-              hours
+              {result.total_driving_hours} hours
             </p>
 
             <p>
@@ -557,32 +530,21 @@ function App() {
                   <strong>
                     Total Trip Hours:
                   </strong>{" "}
-                  {
-                    result.hos_plan
-                      .total_trip_hours
-                  }{" "}
-                  hours
+                  {result.hos_plan.total_trip_hours} hours
                 </p>
 
                 <p>
                   <strong>
                     Trip Days:
                   </strong>{" "}
-                  {
-                    result.hos_plan
-                      .number_of_days
-                  }
+                  {result.hos_plan.number_of_days}
                 </p>
 
                 <p>
                   <strong>
                     Total Break Hours:
                   </strong>{" "}
-                  {
-                    result.hos_plan
-                      .total_break_hours
-                  }{" "}
-                  hours
+                  {result.hos_plan.total_break_hours} hours
                 </p>
               </>
             )}
@@ -606,20 +568,16 @@ function App() {
                 }}
               >
                 <TileLayer
-                  attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                  attribution="&copy; OpenStreetMap contributors &copy; CARTO"
                   url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                 />
 
                 <MapUpdater
-                  points={
-                    uniqueRoutePoints
-                  }
+                  points={uniqueRoutePoints}
                 />
 
                 <Marker
-                  position={
-                    uniqueRoutePoints[0]
-                  }
+                  position={uniqueRoutePoints[0]}
                   icon={markerIcon}
                 >
                   <Popup>
@@ -627,14 +585,12 @@ function App() {
                   </Popup>
                 </Marker>
 
-                {uniqueRoutePoints.length >
-                  1 && (
+                {uniqueRoutePoints.length > 1 && (
                   <Marker
                     position={
                       uniqueRoutePoints[
                         Math.floor(
-                          uniqueRoutePoints.length /
-                            2
+                          uniqueRoutePoints.length / 2
                         )
                       ]
                     }
@@ -646,13 +602,11 @@ function App() {
                   </Marker>
                 )}
 
-                {uniqueRoutePoints.length >
-                  1 && (
+                {uniqueRoutePoints.length > 1 && (
                   <Marker
                     position={
                       uniqueRoutePoints[
-                        uniqueRoutePoints.length -
-                          1
+                        uniqueRoutePoints.length - 1
                       ]
                     }
                     icon={markerIcon}
@@ -663,12 +617,9 @@ function App() {
                   </Marker>
                 )}
 
-                {uniqueRoutePoints.length >
-                  1 && (
+                {uniqueRoutePoints.length > 1 && (
                   <Polyline
-                    positions={
-                      uniqueRoutePoints
-                    }
+                    positions={uniqueRoutePoints}
                   />
                 )}
               </MapContainer>
@@ -677,95 +628,66 @@ function App() {
 
           {result.hos_plan?.days && (
             <div>
-              <h2>
-                ELD Daily Logs
-              </h2>
+              <h2>ELD Daily Logs</h2>
 
-              {result.hos_plan.days.map(
-                (day) => (
+              {result.hos_plan.days.map((day) => (
+                <div
+                  key={day.day}
+                  style={{
+                    border: "1px solid #ccc",
+                    borderRadius: "8px",
+                    padding: "15px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  <h3>Day {day.day}</h3>
+
+                  <ELDGraph logs={day.logs} />
+
                   <div
-                    key={day.day}
                     style={{
-                      border:
-                        "1px solid #ccc",
-                      borderRadius: "8px",
-                      padding: "15px",
-                      marginBottom:
-                        "20px",
+                      marginTop: "15px",
                     }}
                   >
-                    <h3>
-                      Day {day.day}
-                    </h3>
+                    {day.logs.length === 0 ? (
+                      <p>
+                        No activity recorded.
+                      </p>
+                    ) : (
+                      day.logs.map((log, index) => (
+                        <div
+                          key={`${day.day}-${index}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "90px 90px 1fr 1fr",
+                            gap: "10px",
+                            padding: "8px 0",
+                            borderBottom:
+                              "1px solid #eee",
+                          }}
+                        >
+                          <span>
+                            {log.start_hour}h
+                          </span>
 
-                    <ELDGraph
-                      logs={day.logs}
-                    />
+                          <span>
+                            {log.end_hour}h
+                          </span>
 
-                    <div
-                      style={{
-                        marginTop:
-                          "15px",
-                      }}
-                    >
-                      {day.logs.length ===
-                      0 ? (
-                        <p>
-                          No activity
-                          recorded.
-                        </p>
-                      ) : (
-                        day.logs.map(
-                          (
-                            log,
-                            index
-                          ) => (
-                            <div
-                              key={`${day.day}-${index}`}
-                              style={{
-                                display:
-                                  "grid",
-                                gridTemplateColumns:
-                                  "90px 90px 1fr 1fr",
-                                gap: "10px",
-                                padding:
-                                  "8px 0",
-                                borderBottom:
-                                  "1px solid #eee",
-                              }}
-                            >
-                              <span>
-                                {
-                                  log.start_hour
-                                }
-                                h
-                              </span>
+                          <strong>
+                            {log.status}
+                          </strong>
 
-                              <span>
-                                {
-                                  log.end_hour
-                                }
-                                h
-                              </span>
-
-                              <strong>
-                                {
-                                  log.status
-                                }
-                              </strong>
-
-                              <span>
-                                {log.location ||
-                                  "-"}
-                              </span>
-                            </div>
-                          )
-                        )
-                      )}
-                    </div>
+                          <span>
+                            {log.location || "-"}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
-                )
-              )}
+                </div>
+              ))}
             </div>
           )}
         </div>
