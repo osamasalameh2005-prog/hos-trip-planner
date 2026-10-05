@@ -69,51 +69,67 @@ def geocode_location(location):
         "island",
     }
 
+    query = location.strip().lower()
+
+    query_parts = [
+        part.strip().lower()
+        for part in location.split(",")
+        if part.strip()
+    ]
+
     scored_results = []
 
     for result in results:
         address = result.get("address", {})
         result_type = result.get("type", "").lower()
 
-        if result_type in rejected_types:
-            continue
-
-        score = 0
-
-        if result_type in {
-            "city",
-            "town",
-            "village",
-            "municipality",
-        }:
-            score += 100
-
-        if "city" in address:
-            score += 40
-
-        if "town" in address:
-            score += 35
-
-        if "village" in address:
-            score += 30
-
-        if "country" in address:
-            score += 10
-
         display_name = result.get(
             "display_name",
             "",
         ).lower()
 
-        query_parts = [
-            part.strip().lower()
-            for part in location.split(",")
-            if part.strip()
+        if result_type in rejected_types:
+            continue
+
+        score = 0
+
+        # Prefer real populated places.
+        if result_type == "city":
+            score += 120
+        elif result_type == "town":
+            score += 110
+        elif result_type == "municipality":
+            score += 105
+        elif result_type == "village":
+            score += 100
+
+        # Prefer results that contain a country.
+        if address.get("country"):
+            score += 20
+
+        # Names of possible populated places.
+        place_names = [
+            address.get("city", ""),
+            address.get("town", ""),
+            address.get("village", ""),
+            address.get("municipality", ""),
         ]
 
+        # Strong preference for an exact place-name match.
+        for name in place_names:
+            if name and name.strip().lower() == query:
+                score += 100
+
+        # Match all parts supplied by the user.
         for part in query_parts:
             if part in display_name:
-                score += 10
+                score += 20
+
+        # Prefer results where the searched word is
+        # actually the city/town/village name.
+        for name in place_names:
+            if name and query == name.strip().lower():
+                score += 80
 
         scored_results.append(
             (score, result)
